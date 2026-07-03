@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RAG 智能问答系统</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="会话导航">
+        <div class="brand">
+          <div class="brand-mark">R</div>
+          <div>
+            <strong>RAG 智能问答</strong>
+            <span>Prototype v1.0</span>
+          </div>
+        </div>
+
+        <button id="newChatBtn" class="primary-action" type="button">+ 新对话</button>
+        <button id="adminBtn" class="ghost-action" type="button">管理后台</button>
+
+        <label class="search-box">
+          <span>搜索历史</span>
+          <input id="searchInput" type="search" placeholder="搜索对话..." />
+        </label>
+
+        <div class="section-label">最近问题</div>
+        <nav id="conversationList" class="conversation-list"></nav>
+
+        <div class="sidebar-footer">
+          <div class="avatar">A</div>
+          <div>
+            <strong>admin</strong>
+            <span>管理员</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <span class="crumb">RAG 智能问答</span>
+            <h1 id="conversationTitle">新对话</h1>
+          </div>
+          <div class="topbar-actions">
+            <button id="exportBtn" class="icon-button" type="button" title="导出会话">导出</button>
+            <button id="themeBtn" class="icon-button" type="button" title="切换主题">主题</button>
+          </div>
+        </header>
+
+        <section id="hero" class="hero">
+          <div class="hero-badge">知识检索 · 深度思考 · 引用可追溯</div>
+          <h2>把问题变成清晰答案</h2>
+          <p>连接本地知识库，结合混合检索、重排思路和会话上下文，一次对话给出可执行方案。</p>
+        </section>
+
+        <section id="messages" class="messages" aria-live="polite"></section>
+
+        <section class="composer-panel">
+          <div class="model-row">
+            <label>
+              知识库
+              <select id="kbSelect"></select>
+            </label>
+            <label>
+              检索模式
+              <select id="retrievalMode">
+                <option value="hybrid">混合检索</option>
+                <option value="vector">语义检索</option>
+                <option value="keyword">关键词检索</option>
+              </select>
+            </label>
+            <label>
+              Top K
+              <input id="topKInput" type="number" min="1" max="8" value="4" />
+            </label>
+          </div>
+
+          <div class="composer">
+            <textarea id="questionInput" rows="3" placeholder="输入需要系统回答的问题..."></textarea>
+            <button id="sendBtn" type="button">发送</button>
+          </div>
+          <div class="composer-help">
+            <span>Enter 发送，Shift + Enter 换行</span>
+            <span id="statusText">系统就绪</span>
+          </div>
+        </section>
+
+        <section class="capabilities" aria-label="系统能力">
+          <article>
+            <strong>实时答题</strong>
+            <span>流式生成、引用来源、反馈闭环</span>
+          </article>
+          <article>
+            <strong>系统交互</strong>
+            <span>历史会话、多轮上下文、本地持久化</span>
+          </article>
+          <article>
+            <strong>业务系统</strong>
+            <span>知识库管理、检索测试、开放 API 预留</span>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="adminDialog" class="admin-dialog">
+      <form method="dialog">
+        <header>
+          <div>
+            <span class="crumb">管理后台</span>
+            <h2>知识库与模型配置</h2>
+          </div>
+          <button class="icon-button" value="close" aria-label="关闭">关闭</button>
+        </header>
+
+        <div class="admin-grid">
+          <section class="admin-section">
+            <h3>知识库</h3>
+            <label>
+              名称
+              <input id="kbNameInput" type="text" placeholder="例如：企业制度库" />
+            </label>
+            <label>
+              描述
+              <textarea id="kbDescInput" rows="3" placeholder="说明知识库适用范围"></textarea>
+            </label>
+            <button id="addKbBtn" class="primary-action" type="button">新建知识库</button>
+            <div id="kbAdminList" class="admin-list"></div>
+          </section>
+
+          <section class="admin-section">
+            <h3>文档入库</h3>
+            <label>
+              选择知识库
+              <select id="uploadKbSelect"></select>
+            </label>
+            <label>
+              文档内容
+              <textarea id="documentText" rows="9" placeholder="粘贴制度、产品说明、业务流程等文本内容..."></textarea>
+            </label>
+            <div class="inline-fields">
+              <input id="documentName" type="text" placeholder="文档名称" />
+              <button id="addDocBtn" class="primary-action" type="button">上传入库</button>
+            </div>
+            <div id="docAdminList" class="admin-list"></div>
+          </section>
+
+          <section class="admin-section">
+            <h3>检索测试</h3>
+            <label>
+              测试问题
+              <input id="searchTestInput" type="text" placeholder="输入问题查看召回片段" />
+            </label>
+            <button id="searchTestBtn" class="ghost-action" type="button">运行检索</button>
+            <div id="searchResults" class="search-results"></div>
+          </section>
+
+          <section class="admin-section">
+            <h3>模型配置</h3>
+            <label>
+              模型供应商
+              <select id="providerSelect">
+                <option>OpenAI Compatible</option>
+                <option>DeepSeek</option>
+                <option>通义千问</option>
+                <option>Ollama 本地模型</option>
+              </select>
+            </label>
+            <label>
+              模型名称
+              <input id="modelNameInput" type="text" value="demo-rag-model" />
+            </label>
+            <label>
+              系统提示词
+              <textarea id="promptInput" rows="7"></textarea>
+            </label>
+            <button id="saveModelBtn" class="primary-action" type="button">保存配置</button>
+          </section>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
