@@ -30,6 +30,28 @@ index.html
 
 无需安装依赖，也不需要启动后端服务。
 
+如果需要体验服务端 RAG、问题重写、多轮历史记录和 SSE 流式输出，运行：
+
+```powershell
+node server.js
+```
+
+然后访问：
+
+```text
+http://127.0.0.1:5173
+```
+
+## 服务端能力
+
+- `/api/chat/stream`：SSE 流式问答接口
+- `/api/search-test`：Top-K Retriever 检索测试
+- `/api/conversations`：历史会话读取
+- `/api/knowledge-bases`：知识库读取和新建
+- 本地 JSON 模拟数据库，保存多轮历史聊天、问答日志和知识库
+- 简化版问题重写：结合最近历史消息补全追问上下文
+- 简化版 Embedding/Retriever：使用分词、关键词和语义相似度模拟向量召回
+
 ## 测试
 
 需要 Node.js：
@@ -40,4 +62,4 @@ node tests/rag.test.js
 
 ## 说明
 
-当前版本是前端可运行 MVP，RAG 检索逻辑在浏览器本地模拟。后续可按 `RAG智能问答系统开发文档.md` 接入真实后端、Embedding 模型、向量数据库、重排模型和 SSE 流式回答接口。
+当前版本提供无依赖 Node.js 后端来模拟 FastAPI、LangChain、ChromaDB、Embedding、Retriever 和 SSE 的核心行为。后续可按 `RAG智能问答系统开发文档.md` 将模拟实现替换为真实 FastAPI 服务、Embedding 模型、ChromaDB 向量库和重排模型。

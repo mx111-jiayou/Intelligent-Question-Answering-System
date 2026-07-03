@@ -682,6 +682,11 @@
       elements.statusText.textContent = "正在检索知识库...";
       persistAndRender();
 
+      if (window.location.protocol.startsWith("http")) {
+        sendQuestionBySse(conversation, question, startedAt);
+        return;
+      }
+
       window.setTimeout(() => {
         const answer = generateAnswer(question, references, state.model);
         const assistantMessageId = createId("msg");
@@ -709,6 +714,72 @@
         elements.statusText.textContent = `已召回 ${references.length} 条知识片段`;
         persistAndRender();
       }, 520);
+    }
+
+    function sendQuestionBySse(conversation, question, startedAt) {
+      const assistantMessage = {
+        id: createId("msg"),
+        role: "assistant",
+        content: "",
+        references: [],
+        createdAt: new Date().toISOString(),
+      };
+      conversation.messages.push(assistantMessage);
+      persistAndRender();
+
+      const params = new URLSearchParams({
+        conversationId: conversation.id,
+        question,
+        knowledgeBaseId: elements.kbSelect.value,
+        retrievalMode: elements.retrievalMode.value,
+        topK: elements.topKInput.value,
+      });
+      const source = new EventSource(`/api/chat/stream?${params.toString()}`);
+      source.addEventListener("rewrite", (event) => {
+        const data = JSON.parse(event.data);
+        elements.statusText.textContent = `问题已重写：${data.rewrittenQuestion.slice(0, 28)}...`;
+      });
+      source.addEventListener("references", (event) => {
+        const data = JSON.parse(event.data);
+        assistantMessage.references = data.references || [];
+        persistAndRender();
+      });
+      source.addEventListener("message", (event) => {
+        const data = JSON.parse(event.data);
+        assistantMessage.content += data.content || "";
+        saveState(state);
+        renderMessages();
+      });
+      source.addEventListener("done", (event) => {
+        const data = JSON.parse(event.data);
+        source.close();
+        assistantMessage.id = data.messageId || assistantMessage.id;
+        conversation.updatedAt = new Date().toISOString();
+        state.qaLogs.push({
+          id: createId("log"),
+          messageId: assistantMessage.id,
+          conversationId: conversation.id,
+          question,
+          modelName: state.model.name,
+          retrievalMode: elements.retrievalMode.value,
+          referencesCount: assistantMessage.references.length,
+          latencyMs: Math.round(performance.now() - startedAt),
+          feedback: "",
+          createdAt: new Date().toISOString(),
+        });
+        elements.sendBtn.disabled = false;
+        elements.statusText.textContent = `服务端 SSE 完成，召回 ${assistantMessage.references.length} 条`;
+        persistAndRender();
+      });
+      source.onerror = () => {
+        source.close();
+        elements.sendBtn.disabled = false;
+        if (!assistantMessage.content) {
+          assistantMessage.content = "服务端 SSE 暂不可用，已保留你的问题。请确认 server.js 正在运行。";
+        }
+        elements.statusText.textContent = "SSE 连接失败";
+        persistAndRender();
+      };
     }
 
     function createConversation() {
