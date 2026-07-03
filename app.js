@@ -6,6 +6,8 @@
 
   const seedState = {
     activeConversationId: "conv-1",
+    activePage: "chat",
+    selectedKnowledgeBaseId: "all",
     darkMode: false,
     model: {
       provider: "OpenAI Compatible",
@@ -49,6 +51,20 @@
       },
     ],
     qaLogs: [],
+    modelConfigs: [
+      { id: "openai", name: "OpenAI", apiKey: "", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", status: "不可用" },
+      { id: "deepseek", name: "DeepSeek", apiKey: "已配置", baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat", status: "可用" },
+      { id: "dashscope", name: "通义千问 (DashScope)", apiKey: "", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-max", status: "未测试" },
+      { id: "ernie", name: "文心一言 (千帆)", apiKey: "", baseUrl: "https://qianfan.baidubce.com/v2", model: "ERNIE-4.0-8K", status: "未测试" },
+    ],
+    voiceConfigs: [
+      { id: "baidu-asr", name: "百度智能云 ASR", appId: "7672537", apiKey: "已配置", secretKey: "已配置", sampleRate: "16000", status: "默认" },
+      { id: "aliyun-asr", name: "阿里云语音识别", appId: "", apiKey: "", secretKey: "", sampleRate: "16000", status: "未配置" },
+    ],
+    users: [
+      { id: "user-admin", username: "admin", email: "3123124@qq.com", role: "系统管理员", status: "正常" },
+      { id: "user-test", username: "test3", email: "3123124@qq.com", role: "未分配", status: "受限" },
+    ],
   };
 
   function clone(value) {
@@ -210,6 +226,9 @@
         ...parsed,
         model: { ...clone(seedState).model, ...(parsed.model || {}) },
         qaLogs: parsed.qaLogs || [],
+        modelConfigs: parsed.modelConfigs || clone(seedState).modelConfigs,
+        voiceConfigs: parsed.voiceConfigs || clone(seedState).voiceConfigs,
+        users: parsed.users || clone(seedState).users,
       };
     } catch (error) {
       console.warn("Failed to load state", error);
@@ -226,6 +245,8 @@
     const $ = (selector) => document.querySelector(selector);
     const elements = {
       body: document.body,
+      chatPage: $("#chatPage"),
+      consolePage: $("#consolePage"),
       hero: $("#hero"),
       messages: $("#messages"),
       conversationList: $("#conversationList"),
@@ -251,6 +272,7 @@
       modelNameInput: $("#modelNameInput"),
       promptInput: $("#promptInput"),
       qaLogList: $("#qaLogList"),
+      navItems: document.querySelectorAll("[data-page]"),
     };
 
     function activeConversation() {
@@ -276,6 +298,7 @@
         ...state.knowledgeBases.map((kb) => `<option value="${kb.id}">${escapeHtml(kb.name)}</option>`),
       ].join("");
       elements.kbSelect.innerHTML = options;
+      elements.kbSelect.value = state.selectedKnowledgeBaseId;
       elements.uploadKbSelect.innerHTML = state.knowledgeBases
         .map((kb) => `<option value="${kb.id}">${escapeHtml(kb.name)}</option>`)
         .join("");
@@ -312,7 +335,7 @@
 
     function renderMessages() {
       const conversation = activeConversation();
-      elements.conversationTitle.textContent = conversation.title;
+      elements.conversationTitle.textContent = state.activePage === "chat" ? conversation.title : pageTitle(state.activePage);
       elements.hero.classList.toggle("hidden", conversation.messages.length > 0);
       elements.messages.innerHTML = conversation.messages.map(renderMessage).join("");
     }
@@ -412,10 +435,223 @@
 
     function render() {
       elements.body.classList.toggle("dark", state.darkMode);
+      elements.chatPage.hidden = state.activePage !== "chat";
+      elements.consolePage.hidden = state.activePage === "chat";
+      elements.navItems.forEach((item) => item.classList.toggle("active", item.dataset.page === state.activePage));
       renderKnowledgeBaseOptions();
       renderConversations();
       renderMessages();
       renderAdmin();
+      renderConsolePage();
+    }
+
+    function pageTitle(page) {
+      return {
+        chat: "问答对话",
+        dashboard: "仪表盘统计",
+        knowledge: "知识库管理",
+        models: "模型管理",
+        voice: "语音配置",
+        permissions: "权限管理",
+      }[page];
+    }
+
+    function renderConsolePage() {
+      if (state.activePage === "chat") return;
+      const renderers = {
+        dashboard: renderDashboardPage,
+        knowledge: renderKnowledgePage,
+        models: renderModelsPage,
+        voice: renderVoicePage,
+        permissions: renderPermissionsPage,
+      };
+      elements.consolePage.innerHTML = renderers[state.activePage]();
+    }
+
+    function totalDocuments() {
+      return state.knowledgeBases.reduce((sum, kb) => sum + kb.documents.length, 0);
+    }
+
+    function totalSizeText() {
+      const bytes = state.knowledgeBases.reduce(
+        (sum, kb) => sum + kb.documents.reduce((docSum, doc) => docSum + new Blob([doc.content]).size, 0),
+        0,
+      );
+      return bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    }
+
+    function renderDashboardPage() {
+      const docs = totalDocuments();
+      const success = Math.max(1, docs - 1);
+      const failed = docs > 1 ? 1 : 0;
+      const percent = Math.round((success / Math.max(docs, 1)) * 100);
+      return `
+        <div class="console-stack">
+          <div class="stat-grid">
+            ${renderStat("知识库总数", state.knowledgeBases.length, "folder")}
+            ${renderStat("文档总数", docs, "file")}
+            ${renderStat("总大小", totalSizeText(), "size")}
+            ${renderStat("解析任务总数", docs + state.qaLogs.length, "task")}
+          </div>
+          <div class="dashboard-grid">
+            <section class="console-card">
+              <h3>文档解析情况</h3>
+              <div class="parse-row">
+                <div class="donut" style="--value:${percent}">${percent}%<span>成功率</span></div>
+                <div class="parse-list">
+                  <span><b class="ok-dot"></b>成功 ${success}</span>
+                  <span><b class="fail-dot"></b>失败 ${failed}</span>
+                  <span><b class="wait-dot"></b>处理中 0</span>
+                </div>
+              </div>
+            </section>
+            <section class="console-card">
+              <h3>每日问答趋势（最近30天）</h3>
+              <div class="trend-chart">
+                <span style="height:32%">04-20</span>
+                <span style="height:48%">04-23</span>
+                <span style="height:76%">04-26</span>
+                <span style="height:${Math.max(28, state.qaLogs.length * 18)}%">今日</span>
+              </div>
+            </section>
+          </div>
+          <section class="console-card">
+            <h3>各知识库统计</h3>
+            <div class="table-like">
+              <div class="table-row table-head"><span>知识库</span><span>文档数</span><span>成功</span><span>失败</span><span>类型占比</span></div>
+              ${state.knowledgeBases
+                .map(
+                  (kb) => `
+                  <div class="table-row">
+                    <span>${escapeHtml(kb.name)}</span>
+                    <span>${kb.documents.length}</span>
+                    <span>${Math.max(0, kb.documents.length - 1)}</span>
+                    <span>${kb.documents.length ? 1 : 0}</span>
+                    <span><div class="mini-bar"><i style="width:${Math.min(100, kb.documents.length * 18 + 20)}%"></i></div></span>
+                  </div>
+                `,
+                )
+                .join("")}
+            </div>
+          </section>
+        </div>
+      `;
+    }
+
+    function renderStat(label, value, type) {
+      return `<article class="stat-card"><div class="stat-icon">${type.slice(0, 1).toUpperCase()}</div><strong>${value}</strong><span>${label}</span></article>`;
+    }
+
+    function renderKnowledgePage() {
+      return `
+        <div class="console-stack">
+          <div class="console-toolbar">
+            <button class="primary-action" data-console-action="new-kb" type="button">+ 新建知识库</button>
+          </div>
+          <div class="kb-card-grid">
+            ${state.knowledgeBases
+              .map(
+                (kb) => `
+                  <article class="kb-card">
+                    <div class="kb-folder">□</div>
+                    <span class="privacy-tag">私有</span>
+                    <h3>${escapeHtml(kb.name)}</h3>
+                    <p>${escapeHtml(kb.description || "暂无描述")}</p>
+                    <div class="kb-meta"><span>${kb.documents.length} 个文档</span><span>${formatDate(kb.createdAt || new Date())}</span></div>
+                    <div class="card-actions">
+                      <button data-console-action="manage-kb" data-kb-id="${kb.id}" type="button">管理文档</button>
+                      <button data-console-action="chat-kb" data-kb-id="${kb.id}" type="button">开始问答</button>
+                    </div>
+                  </article>
+                `,
+              )
+              .join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderModelsPage() {
+      return `
+        <div class="notice">页面配置优先级高于环境变量。保存配置后可点击测试连接验证模型是否可用。</div>
+        <div class="provider-grid">
+          ${state.modelConfigs.map(renderProviderCard).join("")}
+        </div>
+      `;
+    }
+
+    function renderProviderCard(provider) {
+      const ok = provider.status === "可用";
+      return `
+        <section class="provider-card">
+          <header><h3>${escapeHtml(provider.name)}</h3><span class="status-tag ${ok ? "ok" : ""}">${escapeHtml(provider.status)}</span></header>
+          <label>API Key<input data-provider-field="apiKey" data-provider-id="${provider.id}" value="${escapeHtml(provider.apiKey)}" placeholder="请输入 API Key" /></label>
+          <label>Base URL<input data-provider-field="baseUrl" data-provider-id="${provider.id}" value="${escapeHtml(provider.baseUrl)}" /></label>
+          <label>默认模型<input data-provider-field="model" data-provider-id="${provider.id}" value="${escapeHtml(provider.model)}" /></label>
+          <div class="card-actions">
+            <button data-console-action="save-provider" data-provider-id="${provider.id}" type="button">保存</button>
+            <button data-console-action="test-provider" data-provider-id="${provider.id}" type="button">测试连接</button>
+            <button data-console-action="use-provider" data-provider-id="${provider.id}" type="button">设为默认</button>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderVoicePage() {
+      return `
+        <div class="notice">支持 mp3、wav、m4a、aac、ogg、flac、pcm 等常见音频格式。</div>
+        <div class="provider-grid">
+          ${state.voiceConfigs
+            .map(
+              (provider) => `
+                <section class="provider-card">
+                  <header><h3>${escapeHtml(provider.name)}</h3><span class="status-tag ${provider.status === "默认" ? "ok" : ""}">${escapeHtml(provider.status)}</span></header>
+                  <label>App ID<input data-voice-field="appId" data-voice-id="${provider.id}" value="${escapeHtml(provider.appId)}" placeholder="请输入 App ID" /></label>
+                  <label>API Key<input data-voice-field="apiKey" data-voice-id="${provider.id}" value="${escapeHtml(provider.apiKey)}" placeholder="请输入 API Key" /></label>
+                  <label>Secret Key<input data-voice-field="secretKey" data-voice-id="${provider.id}" value="${escapeHtml(provider.secretKey)}" placeholder="请输入 Secret Key" /></label>
+                  <label>音频采样率<input data-voice-field="sampleRate" data-voice-id="${provider.id}" value="${escapeHtml(provider.sampleRate)}" /></label>
+                  <div class="card-actions">
+                    <button data-console-action="save-voice" data-voice-id="${provider.id}" type="button">保存</button>
+                    <button data-console-action="default-voice" data-voice-id="${provider.id}" type="button">设为默认</button>
+                    <button data-console-action="clear-voice" data-voice-id="${provider.id}" type="button">清除配置</button>
+                  </div>
+                </section>
+              `,
+            )
+            .join("")}
+        </div>
+      `;
+    }
+
+    function renderPermissionsPage() {
+      return `
+        <div class="console-stack">
+          <section class="no-role-card">
+            <div class="check-circle">✓</div>
+            <h3>欢迎访问 RAG 智能问答系统</h3>
+            <p>未分配角色的用户将无法使用系统功能，管理员可在此刷新或分配权限。</p>
+          </section>
+          <section class="console-card">
+            <h3>用户权限</h3>
+            <div class="table-like">
+              <div class="table-row table-head"><span>账号</span><span>邮箱</span><span>角色</span><span>状态</span><span>操作</span></div>
+              ${state.users
+                .map(
+                  (user) => `
+                  <div class="table-row">
+                    <span>${escapeHtml(user.username)}</span>
+                    <span>${escapeHtml(user.email)}</span>
+                    <span>${escapeHtml(user.role)}</span>
+                    <span>${escapeHtml(user.status)}</span>
+                    <span><button data-console-action="toggle-role" data-user-id="${user.id}" type="button">切换角色</button></span>
+                  </div>
+                `,
+                )
+                .join("")}
+            </div>
+          </section>
+        </div>
+      `;
     }
 
     function sendQuestion() {
@@ -485,6 +721,7 @@
       };
       state.conversations.unshift(conversation);
       state.activeConversationId = conversation.id;
+      state.activePage = "chat";
       persistAndRender();
     }
 
@@ -620,6 +857,114 @@
       }
     }
 
+    function switchPage(page) {
+      state.activePage = page;
+      persistAndRender();
+    }
+
+    function handleConsoleAction(event) {
+      const button = event.target.closest("[data-console-action]");
+      if (!button) return;
+      const action = button.dataset.consoleAction;
+      if (action === "new-kb") {
+        elements.adminDialog.showModal();
+        elements.kbNameInput.focus();
+        return;
+      }
+      if (action === "manage-kb") {
+        state.activePage = "chat";
+        elements.uploadKbSelect.value = button.dataset.kbId;
+        elements.adminDialog.showModal();
+        persistAndRender();
+        return;
+      }
+      if (action === "chat-kb") {
+        state.activePage = "chat";
+        state.selectedKnowledgeBaseId = button.dataset.kbId;
+        persistAndRender();
+        toast("已切换到该知识库问答");
+        return;
+      }
+      if (["save-provider", "test-provider", "use-provider"].includes(action)) {
+        updateProviderConfig(button.dataset.providerId, action);
+        return;
+      }
+      if (["save-voice", "default-voice", "clear-voice"].includes(action)) {
+        updateVoiceConfig(button.dataset.voiceId, action);
+        return;
+      }
+      if (action === "toggle-role") {
+        toggleUserRole(button.dataset.userId);
+      }
+    }
+
+    function updateProviderConfig(providerId, action) {
+      const provider = state.modelConfigs.find((item) => item.id === providerId);
+      if (!provider) return;
+      document.querySelectorAll(`[data-provider-id="${providerId}"]`).forEach((input) => {
+        if (input.dataset.providerField) {
+          provider[input.dataset.providerField] = input.value.trim();
+        }
+      });
+      if (action === "test-provider") {
+        provider.status = provider.apiKey || provider.id === "deepseek" ? "可用" : "不可用";
+        toast(provider.status === "可用" ? "连接成功，共 2 个可用模型" : "Request timed out");
+      }
+      if (action === "use-provider") {
+        state.model.provider = provider.name;
+        state.model.name = provider.model;
+        provider.status = "可用";
+        toast("已设为默认模型");
+      }
+      if (action === "save-provider") {
+        toast("模型配置已保存");
+      }
+      persistAndRender();
+    }
+
+    function updateVoiceConfig(voiceId, action) {
+      const provider = state.voiceConfigs.find((item) => item.id === voiceId);
+      if (!provider) return;
+      document.querySelectorAll(`[data-voice-id="${voiceId}"]`).forEach((input) => {
+        if (input.dataset.voiceField) {
+          provider[input.dataset.voiceField] = input.value.trim();
+        }
+      });
+      if (action === "clear-voice") {
+        provider.appId = "";
+        provider.apiKey = "";
+        provider.secretKey = "";
+        provider.status = "未配置";
+        toast("语音配置已清除");
+      } else if (action === "default-voice") {
+        state.voiceConfigs.forEach((item) => {
+          item.status = item.id === voiceId ? "默认" : item.apiKey ? "已配置" : "未配置";
+        });
+        toast("已设为默认语音识别 Provider");
+      } else {
+        provider.status = provider.apiKey ? "已配置" : "未配置";
+        toast("语音配置已保存");
+      }
+      persistAndRender();
+    }
+
+    function toggleUserRole(userId) {
+      const user = state.users.find((item) => item.id === userId);
+      if (!user) return;
+      if (user.role === "系统管理员") {
+        user.role = "普通用户";
+        user.status = "正常";
+      } else if (user.role === "普通用户") {
+        user.role = "未分配";
+        user.status = "受限";
+      } else {
+        user.role = "系统管理员";
+        user.status = "正常";
+      }
+      persistAndRender();
+      toast("权限已更新");
+    }
+
     function exportConversation() {
       const conversation = activeConversation();
       const content = conversation.messages
@@ -646,7 +991,15 @@
       state.darkMode = !state.darkMode;
       persistAndRender();
     });
+    elements.navItems.forEach((item) => {
+      item.addEventListener("click", () => switchPage(item.dataset.page));
+    });
+    elements.consolePage.addEventListener("click", handleConsoleAction);
     elements.searchInput.addEventListener("input", renderConversations);
+    elements.kbSelect.addEventListener("change", () => {
+      state.selectedKnowledgeBaseId = elements.kbSelect.value;
+      saveState(state);
+    });
     elements.uploadKbSelect.addEventListener("change", renderAdmin);
     elements.conversationList.addEventListener("click", (event) => {
       const button = event.target.closest("[data-conversation-id]");
@@ -694,6 +1047,14 @@
     return new Intl.DateTimeFormat("zh-CN", {
       hour: "2-digit",
       minute: "2-digit",
+    }).format(new Date(value));
+  }
+
+  function formatDate(value) {
+    return new Intl.DateTimeFormat("zh-CN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
     }).format(new Date(value));
   }
 

@@ -18,7 +18,17 @@
         </div>
 
         <button id="newChatBtn" class="primary-action" type="button">+ 新对话</button>
-        <button id="adminBtn" class="ghost-action" type="button">管理后台</button>
+        <button id="adminBtn" class="ghost-action" type="button">弹窗管理</button>
+
+        <div class="section-label">功能导航</div>
+        <nav class="main-nav" aria-label="系统功能">
+          <button class="nav-item active" data-page="chat" type="button">问答对话</button>
+          <button class="nav-item" data-page="dashboard" type="button">仪表盘统计</button>
+          <button class="nav-item" data-page="knowledge" type="button">知识库</button>
+          <button class="nav-item" data-page="models" type="button">模型管理</button>
+          <button class="nav-item" data-page="voice" type="button">语音配置</button>
+          <button class="nav-item" data-page="permissions" type="button">权限管理</button>
+        </nav>
 
         <label class="search-box">
           <span>搜索历史</span>
@@ -44,63 +54,69 @@
             <h1 id="conversationTitle">新对话</h1>
           </div>
           <div class="topbar-actions">
+            <span class="role-badge">系统管理员</span>
+            <span class="user-name">admin</span>
             <button id="exportBtn" class="icon-button" type="button" title="导出会话">导出</button>
             <button id="themeBtn" class="icon-button" type="button" title="切换主题">主题</button>
           </div>
         </header>
 
-        <section id="hero" class="hero">
-          <div class="hero-badge">知识检索 · 深度思考 · 引用可追溯</div>
-          <h2>把问题变成清晰答案</h2>
-          <p>连接本地知识库，结合混合检索、重排思路和会话上下文，一次对话给出可执行方案。</p>
-        </section>
+        <div id="chatPage" class="page">
+          <section id="hero" class="hero">
+            <div class="hero-badge">知识检索 · 深度思考 · 引用可追溯</div>
+            <h2>把问题变成清晰答案</h2>
+            <p>连接本地知识库，结合混合检索、重排思路和会话上下文，一次对话给出可执行方案。</p>
+          </section>
 
-        <section id="messages" class="messages" aria-live="polite"></section>
+          <section id="messages" class="messages" aria-live="polite"></section>
 
-        <section class="composer-panel">
-          <div class="model-row">
-            <label>
-              知识库
-              <select id="kbSelect"></select>
-            </label>
-            <label>
-              检索模式
-              <select id="retrievalMode">
-                <option value="hybrid">混合检索</option>
-                <option value="vector">语义检索</option>
-                <option value="keyword">关键词检索</option>
-              </select>
-            </label>
-            <label>
-              Top K
-              <input id="topKInput" type="number" min="1" max="8" value="4" />
-            </label>
-          </div>
+          <section class="composer-panel">
+            <div class="model-row">
+              <label>
+                项目名称 / 知识库
+                <select id="kbSelect"></select>
+              </label>
+              <label>
+                检索模式
+                <select id="retrievalMode">
+                  <option value="hybrid">混合检索</option>
+                  <option value="vector">语义检索</option>
+                  <option value="keyword">关键词检索</option>
+                </select>
+              </label>
+              <label>
+                Top K
+                <input id="topKInput" type="number" min="1" max="8" value="4" />
+              </label>
+            </div>
 
-          <div class="composer">
-            <textarea id="questionInput" rows="3" placeholder="输入需要系统回答的问题..."></textarea>
-            <button id="sendBtn" type="button">发送</button>
-          </div>
-          <div class="composer-help">
-            <span>Enter 发送，Shift + Enter 换行</span>
-            <span id="statusText">系统就绪</span>
-          </div>
-        </section>
+            <div class="composer">
+              <textarea id="questionInput" rows="3" placeholder="输入问题，Enter 发送，Shift+Enter 换行"></textarea>
+              <button id="sendBtn" type="button">发送</button>
+            </div>
+            <div class="composer-help">
+              <span>支持引用展开、模型选择和反馈记录</span>
+              <span id="statusText">系统就绪</span>
+            </div>
+          </section>
 
-        <section class="capabilities" aria-label="系统能力">
-          <article>
-            <strong>实时答题</strong>
-            <span>流式生成、引用来源、反馈闭环</span>
-          </article>
-          <article>
-            <strong>系统交互</strong>
-            <span>历史会话、多轮上下文、本地持久化</span>
-          </article>
-          <article>
-            <strong>业务系统</strong>
-            <span>知识库管理、检索测试、开放 API 预留</span>
-          </article>
-        </section>
+          <section class="capabilities" aria-label="系统能力">
+            <article>
+              <strong>实时答题</strong>
+              <span>流式生成、引用来源、反馈闭环</span>
+            </article>
+            <article>
+              <strong>系统交互</strong>
+              <span>历史会话、多轮上下文、本地持久化</span>
+            </article>
+            <article>
+              <strong>业务系统</strong>
+              <span>知识库管理、检索测试、开放 API 预留</span>
+            </article>
+          </section>
+        </div>
+
+        <section id="consolePage" class="page console-page" hidden></section>
       </main>
     </div>
 
