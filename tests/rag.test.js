@@ -47,4 +47,10 @@ const answer = generateAnswer("报销流程是什么？", results, {
 assert.match(answer, /参考依据/);
 assert.match(answer, /demo-model/);
 
+const emptyAnswer = generateAnswer("完全不存在的问题", [], {
+  provider: "Demo",
+  name: "demo-model",
+});
+assert.match(emptyAnswer, /没有在当前知识库中检索到/);
+
 console.log("RAG core tests passed");

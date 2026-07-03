@@ -176,7 +176,6 @@ select:focus {
   gap: 3px;
   width: 100%;
   padding: 10px;
-  text-align: left;
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius);
@@ -201,6 +200,50 @@ select:focus {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.conversation-main {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+}
+
+.conversation-actions,
+.message-actions,
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.conversation-actions {
+  margin-top: 6px;
+}
+
+.conversation-actions button,
+.message-actions button,
+.card-actions button {
+  min-height: 26px;
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.conversation-actions button:hover,
+.message-actions button:hover,
+.message-actions button.selected,
+.card-actions button:hover {
+  color: var(--blue-dark);
+  border-color: rgba(47, 128, 237, 0.35);
+  background: rgba(47, 128, 237, 0.08);
 }
 
 .sidebar-footer {
@@ -336,6 +379,11 @@ select:focus {
   border-radius: var(--radius);
 }
 
+.message-actions {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
 .composer-panel {
   max-width: 860px;
   width: 100%;
@@ -450,6 +498,10 @@ select:focus {
   font-size: 15px;
 }
 
+.admin-section-wide {
+  grid-column: 1 / -1;
+}
+
 .inline-fields {
   display: grid;
   grid-template-columns: 1fr 108px;
@@ -462,6 +514,10 @@ select:focus {
   gap: 8px;
   max-height: 220px;
   overflow: auto;
+}
+
+.log-list {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
 .admin-card,
@@ -525,6 +581,9 @@ select:focus {
 .dark select,
 .dark .ghost-action,
 .dark .icon-button,
+.dark .conversation-actions button,
+.dark .message-actions button,
+.dark .card-actions button,
 .dark .conversation-item:hover,
 .dark .conversation-item.active,
 .dark .admin-card,

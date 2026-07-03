@@ -48,6 +48,7 @@
         messages: [],
       },
     ],
+    qaLogs: [],
   };
 
   function clone(value) {
@@ -208,6 +209,7 @@
         ...clone(seedState),
         ...parsed,
         model: { ...clone(seedState).model, ...(parsed.model || {}) },
+        qaLogs: parsed.qaLogs || [],
       };
     } catch (error) {
       console.warn("Failed to load state", error);
@@ -248,6 +250,7 @@
       providerSelect: $("#providerSelect"),
       modelNameInput: $("#modelNameInput"),
       promptInput: $("#promptInput"),
+      qaLogList: $("#qaLogList"),
     };
 
     function activeConversation() {
@@ -292,10 +295,16 @@
       elements.conversationList.innerHTML = items
         .map(
           (conversation) => `
-            <button class="conversation-item ${conversation.id === state.activeConversationId ? "active" : ""}" data-conversation-id="${conversation.id}" type="button">
-              <strong>${escapeHtml(conversation.title)}</strong>
-              <span>${conversation.messages.length ? escapeHtml(conversation.messages.at(-1).content) : "尚未开始提问"}</span>
-            </button>
+            <div class="conversation-item ${conversation.id === state.activeConversationId ? "active" : ""}">
+              <button class="conversation-main" data-conversation-id="${conversation.id}" type="button">
+                <strong>${escapeHtml(conversation.title)}</strong>
+                <span>${conversation.messages.length ? escapeHtml(conversation.messages.at(-1).content) : "尚未开始提问"}</span>
+              </button>
+              <div class="conversation-actions">
+                <button data-rename-conversation="${conversation.id}" type="button">重命名</button>
+                <button data-delete-conversation="${conversation.id}" type="button">删除</button>
+              </div>
+            </div>
           `,
         )
         .join("");
@@ -335,7 +344,19 @@
           </div>
           <div class="message-content">${escapeHtml(message.content)}</div>
           ${references}
+          ${message.role === "assistant" ? renderFeedback(message) : ""}
         </article>
+      `;
+    }
+
+    function renderFeedback(message) {
+      const rating = message.feedback?.rating;
+      return `
+        <div class="message-actions">
+          <button class="${rating === "like" ? "selected" : ""}" data-feedback="like" data-message-id="${message.id}" type="button">有帮助</button>
+          <button class="${rating === "dislike" ? "selected" : ""}" data-feedback="dislike" data-message-id="${message.id}" type="button">需改进</button>
+          <button data-copy-message="${message.id}" type="button">复制</button>
+        </div>
       `;
     }
 
@@ -360,6 +381,9 @@
                 <div class="admin-card">
                   <strong>${escapeHtml(doc.name)}</strong>
                   <span>${escapeHtml(doc.content.slice(0, 88))}${doc.content.length > 88 ? "..." : ""}</span>
+                  <div class="card-actions">
+                    <button data-delete-document="${doc.id}" data-kb-id="${selectedKb.id}" type="button">删除文档</button>
+                  </div>
                 </div>
               `,
             )
@@ -369,6 +393,21 @@
       elements.providerSelect.value = state.model.provider;
       elements.modelNameInput.value = state.model.name;
       elements.promptInput.value = state.model.prompt;
+      elements.qaLogList.innerHTML = state.qaLogs.length
+        ? state.qaLogs
+            .slice()
+            .reverse()
+            .map(
+              (log) => `
+                <div class="admin-card">
+                  <strong>${escapeHtml(log.question)}</strong>
+                  <span>模型：${escapeHtml(log.modelName)} · 模式：${escapeHtml(log.retrievalMode)} · 召回：${log.referencesCount} 条 · 耗时：${log.latencyMs}ms</span>
+                  <span>反馈：${escapeHtml(log.feedback || "暂无")}</span>
+                </div>
+              `,
+            )
+            .join("")
+        : `<div class="admin-card">暂无问答日志</div>`;
     }
 
     function render() {
@@ -384,6 +423,7 @@
       if (!question) return;
       const conversation = activeConversation();
       const now = new Date().toISOString();
+      const startedAt = performance.now();
       const references = searchKnowledgeBase(question, state.knowledgeBases, {
         knowledgeBaseId: elements.kbSelect.value,
         mode: elements.retrievalMode.value,
@@ -408,11 +448,24 @@
 
       window.setTimeout(() => {
         const answer = generateAnswer(question, references, state.model);
+        const assistantMessageId = createId("msg");
         conversation.messages.push({
-          id: createId("msg"),
+          id: assistantMessageId,
           role: "assistant",
           content: answer,
           references,
+          createdAt: new Date().toISOString(),
+        });
+        state.qaLogs.push({
+          id: createId("log"),
+          messageId: assistantMessageId,
+          conversationId: conversation.id,
+          question,
+          modelName: state.model.name,
+          retrievalMode: elements.retrievalMode.value,
+          referencesCount: references.length,
+          latencyMs: Math.round(performance.now() - startedAt),
+          feedback: "",
           createdAt: new Date().toISOString(),
         });
         conversation.updatedAt = new Date().toISOString();
@@ -432,6 +485,31 @@
       };
       state.conversations.unshift(conversation);
       state.activeConversationId = conversation.id;
+      persistAndRender();
+    }
+
+    function renameConversation(conversationId) {
+      const conversation = state.conversations.find((item) => item.id === conversationId);
+      if (!conversation) return;
+      const title = window.prompt("请输入新的会话标题", conversation.title);
+      if (!title || !title.trim()) return;
+      conversation.title = title.trim().slice(0, 40);
+      conversation.updatedAt = new Date().toISOString();
+      persistAndRender();
+    }
+
+    function deleteConversation(conversationId) {
+      if (state.conversations.length <= 1) {
+        toast("至少保留一个会话");
+        return;
+      }
+      if (!window.confirm("确定删除这个会话吗？")) return;
+      const index = state.conversations.findIndex((item) => item.id === conversationId);
+      if (index < 0) return;
+      state.conversations.splice(index, 1);
+      if (state.activeConversationId === conversationId) {
+        state.activeConversationId = state.conversations[0].id;
+      }
       persistAndRender();
     }
 
@@ -471,6 +549,15 @@
       toast("文档已入库");
     }
 
+    function deleteDocument(knowledgeBaseId, documentId) {
+      const kb = state.knowledgeBases.find((item) => item.id === knowledgeBaseId);
+      if (!kb) return;
+      if (!window.confirm("确定删除这个文档吗？")) return;
+      kb.documents = kb.documents.filter((doc) => doc.id !== documentId);
+      persistAndRender();
+      toast("文档已删除");
+    }
+
     function runSearchTest() {
       const query = elements.searchTestInput.value.trim();
       if (!query) return;
@@ -503,6 +590,36 @@
       toast("模型配置已保存");
     }
 
+    function setFeedback(messageId, rating) {
+      for (const conversation of state.conversations) {
+        const message = conversation.messages.find((item) => item.id === messageId);
+        if (message) {
+          message.feedback = {
+            rating,
+            createdAt: new Date().toISOString(),
+          };
+          const log = state.qaLogs.find((item) => item.messageId === messageId);
+          if (log) {
+            log.feedback = rating === "like" ? "有帮助" : "需改进";
+          }
+          persistAndRender();
+          toast("反馈已记录");
+          return;
+        }
+      }
+    }
+
+    async function copyMessage(messageId) {
+      const message = state.conversations.flatMap((item) => item.messages).find((item) => item.id === messageId);
+      if (!message) return;
+      try {
+        await navigator.clipboard.writeText(message.content);
+        toast("答案已复制");
+      } catch (error) {
+        toast("当前浏览器不支持自动复制");
+      }
+    }
+
     function exportConversation() {
       const conversation = activeConversation();
       const content = conversation.messages
@@ -533,9 +650,35 @@
     elements.uploadKbSelect.addEventListener("change", renderAdmin);
     elements.conversationList.addEventListener("click", (event) => {
       const button = event.target.closest("[data-conversation-id]");
+      const renameButton = event.target.closest("[data-rename-conversation]");
+      const deleteButton = event.target.closest("[data-delete-conversation]");
+      if (renameButton) {
+        renameConversation(renameButton.dataset.renameConversation);
+        return;
+      }
+      if (deleteButton) {
+        deleteConversation(deleteButton.dataset.deleteConversation);
+        return;
+      }
+      if (button) {
+        state.activeConversationId = button.dataset.conversationId;
+        persistAndRender();
+      }
+    });
+    elements.messages.addEventListener("click", (event) => {
+      const feedbackButton = event.target.closest("[data-feedback]");
+      const copyButton = event.target.closest("[data-copy-message]");
+      if (feedbackButton) {
+        setFeedback(feedbackButton.dataset.messageId, feedbackButton.dataset.feedback);
+      }
+      if (copyButton) {
+        copyMessage(copyButton.dataset.copyMessage);
+      }
+    });
+    elements.docAdminList.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-delete-document]");
       if (!button) return;
-      state.activeConversationId = button.dataset.conversationId;
-      persistAndRender();
+      deleteDocument(button.dataset.kbId, button.dataset.deleteDocument);
     });
     elements.questionInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
